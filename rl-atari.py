@@ -20,25 +20,29 @@ from rl.memory import SequentialMemory
 from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
-
+SHOW_IMAGE = True
+SHOW_PROC = False
 #Specific Processing for atari games
 class AtariProcessor(Processor):
 	def __init__(self,input_size):
 		self.input_size = input_size
 
-    def process_observation(self, observation):
-        assert observation.ndim == 3 
-        #image processing goes here
-        proc_observation= cvImgProcChain(observation).resize(self.input_size).gray().show('processed').process()
-        return proc_observation
+	def process_observation(self, observation):
+		assert observation.ndim == 3 
+		#image processing goes here
+		if SHOW_PROC:
+			proc_observation= cvImgProcChain(observation).resize(self.input_size).gray().show('processed').process()
+		else:
+			proc_observation= cvImgProcChain(observation).resize(self.input_size).gray().process()
+		return proc_observation
 
-    def process_state_batch(self, batch):
-        # batch processing for compressino
-        processed_batch = batch.astype('float32') / 255.
-        return processed_batch
+	def process_state_batch(self, batch):
+		# batch processing for compressino
+		processed_batch = batch.astype('float32') / 255.
+		return processed_batch
 
-    def process_reward(self, reward):
-        return np.clip(reward, -1., 1.)
+	def process_reward(self, reward):
+		return np.clip(reward, -1., 1.)
 
 
 #Convolutional Neural Networks
@@ -84,6 +88,7 @@ class cvImgProcChain:
 		return self
 	
 	def show(self,winname):
+		cv2.namedWindow(winname,cv2.WINDOW_NORMAL)
 		cv2.imshow(winname, self.img)
 		cv2.waitKey(1)
 		return self
@@ -140,33 +145,33 @@ def main():
 
 	#Agent construct and compile
 	dqn = DQNAgent(model=model,nb_actions=num_actions, policy=policy, memory=memory,
-               processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=10000,
-               train_interval=4, delta_clip=1.)
+			   processor=processor, nb_steps_warmup=50000, gamma=.99, target_model_update=10000,
+			   train_interval=4, delta_clip=1.)
 	dqn.compile(Adam(lr=.00025), metrics=['mae'])
 
 	#if begin training e train our dqn agent
 	if args.mode == 'train':
 		#training weights callbacks allow for interrupts
-	    weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
-	    checkpoint_weights_filename = 'dqn_' + args.env_name + '_weights_{step}.h5f'
-	    log_filename = 'dqn_{}_log.json'.format(args.env_name)
-	    callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
-	    callbacks += [FileLogger(log_filename, interval=100)]
-	    dqn.fit(env, callbacks=callbacks, nb_steps=1750000, log_interval=10000)
+		weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
+		checkpoint_weights_filename = 'dqn_' + args.env_name + '_weights_{step}.h5f'
+		log_filename = 'dqn_{}_log.json'.format(args.env_name)
+		callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
+		callbacks += [FileLogger(log_filename, interval=100)]
+		dqn.fit(env, callbacks=callbacks, nb_steps=1750000, log_interval=10000)
 
-	    # save weights
-	    dqn.save_weights(weights_filename, overwrite=True)
+		# save weights
+		dqn.save_weights(weights_filename, overwrite=True)
 
-	    # evaluate algorithm for 10 episodes
-	    dqn.test(env, nb_episodes=10, visualize=False)
+		# evaluate algorithm for 10 episodes
+		dqn.test(env, nb_episodes=10, visualize=SHOW_IMAGE)
 
 	#else run our best weights
 	elif args.mode == 'test':
-	    weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
-	    if args.weights:
-	        weights_filename = args.weights
-	    dqn.load_weights(weights_filename)
-	    dqn.test(env, nb_episodes=10, visualize=True)
+		weights_filename = 'dqn_{}_weights.h5f'.format(args.env_name)
+		if args.weights:
+			weights_filename = args.weights
+		dqn.load_weights(weights_filename)
+		dqn.test(env, nb_episodes=10, visualize=True)
 
 if __name__ == '__main__':
 	main();
